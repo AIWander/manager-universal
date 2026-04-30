@@ -418,29 +418,38 @@ fn default_max_retries() -> u32 {
 fn is_destructive_prompt(prompt: &str) -> bool {
     let lc = prompt.to_lowercase();
     [
-        "git push", "cargo build", "cargo test", "cargo run",
-        "gh run watch", "gh workflow",
-        "npm install", "npm ci", "pip install", "uv sync", "uv pip",
-        "docker build", "docker push", "docker compose up",
-        "terraform apply", "kubectl apply",
-        "make ", "format", "delete", "--write",
+        "git push",
+        "cargo build",
+        "cargo test",
+        "cargo run",
+        "gh run watch",
+        "gh workflow",
+        "npm install",
+        "npm ci",
+        "pip install",
+        "uv sync",
+        "uv pip",
+        "docker build",
+        "docker push",
+        "docker compose up",
+        "terraform apply",
+        "kubectl apply",
+        "make ",
+        "format",
+        "delete",
+        "--write",
     ]
     .iter()
     .any(|kw| lc.contains(kw))
 }
 
 /// v1.4: Controls stall recovery behaviour -- auto retries on dead PID, manual requires resume_task.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 enum StallRecovery {
+    #[default]
     Auto,
     Manual,
-}
-
-impl Default for StallRecovery {
-    fn default() -> Self {
-        StallRecovery::Auto
-    }
 }
 
 /// v1.4: Distinguishes why a task entered Paused status.
@@ -1911,12 +1920,10 @@ impl Server {
         let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
 
         // Resolve both source dirs
-        let ops_dir = std::env::var("OPS_BREADCRUMBS_DIR").unwrap_or_else(|_| {
-            format!(r"{}\CPC\ops-data\logs", local_appdata)
-        });
-        let local_dir = std::env::var("LOCAL_BREADCRUMBS_DIR").unwrap_or_else(|_| {
-            format!(r"{}\CPC\local-data\logs", local_appdata)
-        });
+        let ops_dir = std::env::var("OPS_BREADCRUMBS_DIR")
+            .unwrap_or_else(|_| format!(r"{}\CPC\ops-data\logs", local_appdata));
+        let local_dir = std::env::var("LOCAL_BREADCRUMBS_DIR")
+            .unwrap_or_else(|_| format!(r"{}\CPC\local-data\logs", local_appdata));
 
         // Collect JSONL entries from one source dir into a HashMap keyed by id.
         fn collect_entries(dir: &str, map: &mut std::collections::HashMap<String, Value>) {
@@ -2360,7 +2367,11 @@ impl Server {
 /// PID-liveness detection is definitive, so a single settle window is sufficient.
 /// retry_count == 0 means first attempt (no backoff). Any retry gets 12-minute wait.
 fn retry_backoff_secs(retry_count: u32) -> u64 {
-    if retry_count == 0 { 0 } else { 720 }
+    if retry_count == 0 {
+        0
+    } else {
+        720
+    }
 }
 
 /// Item 18: Spawn execution for a retry task based on its backend.
@@ -9604,7 +9615,8 @@ async fn stall_watchdog(tasks: Arc<RwLock<HashMap<String, Task>>>, _timeout_secs
                 ),
                 StallRecovery::Manual => (
                     format!("[DEAD] {}", label),
-                    "Child process exited. Manual recovery required -- call resume_task.".to_string(),
+                    "Child process exited. Manual recovery required -- call resume_task."
+                        .to_string(),
                 ),
             };
             let _ = do_notify(&title, &body, "warning", 10000);
