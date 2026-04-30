@@ -2,6 +2,17 @@
 
 All notable changes to manager-universal are documented here.
 
+## [1.0.1] - 2026-04-29
+
+### Fixed
+
+- **Dashboard port pin honored on first attempt.** v1.0.0 inherited a public-v1.4.0 bug
+  where the dashboard port resolution applied a random jitter (0..19) to the user-pinned
+  `CPC_DASHBOARD_PORT` *before* the first bind attempt. With `CPC_DASHBOARD_PORT=9999`,
+  the dashboard would land somewhere in 9999..10018 chosen randomly per restart, breaking
+  bookmarked URLs. Fixed by binding to the preferred port directly on first attempt;
+  walk-forward through the 100-port range still kicks in only on collision.
+
 ## [1.0.0] - 2026-04-29
 
 Initial public release of **manager-universal** -- the universal-portability

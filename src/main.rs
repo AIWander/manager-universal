@@ -9846,12 +9846,11 @@ async fn start_dashboard(state: DashboardState) {
         .layer(cors)
         .with_state(state);
 
-    // Try preferred port with random jitter, then walk forward through a 100-port range.
-    // Jitter avoids collisions when multiple manager instances start concurrently.
-    let jitter: u16 = rand::random::<u16>() % 20;
+    // Try preferred port first; on collision, walk forward through a 100-port range.
+    // v1.0.1: honor user-pinned CPC_DASHBOARD_PORT instead of jittering on first attempt.
     let range_size: u16 = 100;
     let mut attempts: u16 = 0;
-    let mut bound_port = preferred + jitter;
+    let mut bound_port = preferred;
     let listener = loop {
         match tokio::net::TcpListener::bind(format!("127.0.0.1:{}", bound_port)).await {
             Ok(l) => break l,

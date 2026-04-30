@@ -1,6 +1,6 @@
 [package]
 name = "manager-universal"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Multi-AI delegation orchestrator MCP server - universal distribution with v1.4 reliability fixes. Routes coding tasks across Claude Code, Codex, and Gemini with retry, rollback, and dashboard."
