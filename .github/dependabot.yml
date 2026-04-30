@@ -1,0 +1,15 @@
+# Dependabot configuration -- security-only
+# Cargo/pip version update blocks removed. Dependabot Security Updates
+# (org-level toggle) handles vulnerability fixes for all ecosystems.
+# Only GitHub Actions version updates are tracked here.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"

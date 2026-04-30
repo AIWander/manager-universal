@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --release --locked
+        timeout-minutes: 15
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            suffix: x64
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            suffix: aarch64
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Rename binary
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          Copy-Item "target/${{ matrix.target }}/release/manager.exe" "manager-universal-$version-${{ matrix.suffix }}.exe"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: manager-universal-${{ matrix.suffix }}
+          path: manager-universal-*-${{ matrix.suffix }}.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*.exe
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true

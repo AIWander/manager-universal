@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "manager": {
+      "_comment_x64": "Use this path on x64 (Intel/AMD) Windows machines",
+      "command": "C:\\CPC\\servers\\manager.exe",
+      "args": [],
+
+      "_comment_arm64": "Use this path on ARM64 (Snapdragon/Qualcomm) Windows machines",
+      "_command_arm64": "C:\\CPC\\servers\\arm64\\manager.exe",
+      "_args_arm64": []
+    }
+  }
+}
