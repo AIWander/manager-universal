@@ -25,9 +25,11 @@ a multi-agent AI orchestration platform. Related repos:
 
 ---
 
-## What's New in v1.0.0
+## What's New in v1.0.1
 
-**Reliability fixes (not in main manager repo):**
+**v1.0.1 patch:** dashboard port resolution now honors the user-pinned `CPC_DASHBOARD_PORT` on the first bind attempt instead of jittering before trying. The walk-forward fallback through 100 ports still kicks in only on collision. v1.0.0 inherited a public-v1.4.0 bug that randomly offset the preferred port by 0..19 even when it was free.
+
+**Reliability fixes from v1.0.0 (not in main manager repo):**
 
 - **Retry budget** -- `max_retries` defaults to 1 (not unlimited). When a task
   exhausts its budget it transitions to `failed_max_retries` and stops. Budget
