@@ -1,222 +1,230 @@
-# manager-universal
+# Manager Universal — Multi-Backend AI Delegation for MCP
 
 [![CI](https://github.com/AIWander/manager-universal/actions/workflows/ci.yml/badge.svg)](https://github.com/AIWander/manager-universal/actions/workflows/ci.yml)
 
-Multi-vendor AI orchestration from inside any MCP client. Routes coding,
-reasoning, and toolchain tasks to **Claude Code**, **OpenAI Codex**,
-**Google Gemini CLI**, or **OpenAI GPT API** -- based on task shape,
-historical success rates, and explicit user choice.
+A Rust MCP server that delegates coding, reasoning, and toolchain tasks to **Claude Code**, **OpenAI Codex**, **Google Gemini CLI**, or **OpenAI GPT API** through a single tool surface. One server replaces three separate MCP integrations (claude-runner, codex, gemini-mcp) with unified task lifecycle, persistent state, and a live dashboard.
 
-One MCP server. Four backends. Server-side blocking. Durable coordination.
+Manager sits between your orchestration context and disposable coding agents. Your chat session holds goal-level reasoning; manager handles subprocess spawning, output tailing, stall detection, retry escalation, and crash recovery. Long-running delegations survive client restarts. Failed tasks retry with backend escalation. Parallel fan-out collects results without burning orchestration tokens.
 
-**manager-universal** is the universal-portability distribution of
-[manager](https://github.com/AIWander/manager), combining:
-- v1.4 reliability fixes (retry budget, stall recovery, PID-liveness watchdog)
-- All v1.3.5-v1.4.5 polish from the main repo
-- Zero hardcoded user paths -- resolves everything via env vars or platform defaults
-- Dual-source breadcrumb reading (ops + local server dirs)
+**Part of [CPC](https://github.com/AIWander) (Copy Paste Compute)** — a multi-agent AI orchestration platform. Related repos: [hands](https://github.com/AIWander/hands) · [workflow](https://github.com/AIWander/workflow) · [local](https://github.com/AIWander/local) · [cpc-paths](https://github.com/AIWander/cpc-paths)
 
-**Part of [CPC](https://github.com/AIWander) (Copy Paste Compute)** --
-a multi-agent AI orchestration platform. Related repos:
-[local](https://github.com/AIWander/local) -
-[hands](https://github.com/AIWander/hands) -
-[workflow](https://github.com/AIWander/workflow) -
-[cpc-paths](https://github.com/AIWander/cpc-paths)
+## Install
 
----
+### Pre-built Binary
 
-## What's New in v1.0.1
+1. Download from the [latest release](https://github.com/AIWander/manager-universal/releases/latest):
+   - **Windows x64** → `manager-universal-vX.Y.Z-x64.exe`
+   - **Windows ARM64** → `manager-universal-vX.Y.Z-aarch64.exe`
+2. Rename to `manager.exe` and place in `%LOCALAPPDATA%\CPC\servers\`.
+3. Add to `claude_desktop_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "manager": {
+         "command": "%LOCALAPPDATA%\\CPC\\servers\\manager.exe",
+         "env": {
+           "CPC_DASHBOARD_PORT": "9999",
+           "CPC_VOLUMES_PATH": "C:\\My Drive\\Volumes"
+         }
+       }
+     }
+   }
+   ```
+4. Restart Claude Desktop.
 
-**v1.0.1 patch:** dashboard port resolution now honors the user-pinned `CPC_DASHBOARD_PORT` on the first bind attempt instead of jittering before trying. The walk-forward fallback through 100 ports still kicks in only on collision. v1.0.0 inherited a public-v1.4.0 bug that randomly offset the preferred port by 0..19 even when it was free.
+### Build from Source
 
-**Reliability fixes from v1.0.0 (not in main manager repo):**
+```bash
+git clone https://github.com/AIWander/manager-universal.git
+cd manager-universal
+cargo build --release
+# binary at target/release/manager.exe
+```
 
-- **Retry budget** -- `max_retries` defaults to 1 (not unlimited). When a task
-  exhausts its budget it transitions to `failed_max_retries` and stops. Budget
-  is inherited by retry tasks so escalation chains stay bounded.
-- **Destructive-task safety** -- new `stall_recovery: auto | manual` field on
-  every task. Prompts containing destructive keywords (`git push`, `cargo build`,
-  `docker push`, etc.) default to `manual` -- stalls notify the user and wait
-  for `resume_task` instead of auto-retrying. Explicit `stall_recovery` param
-  overrides the heuristic.
-- **PID-liveness stall watchdog** -- replaced time-based output-silence
-  detection (false positives on slow tools like cargo builds) with direct child
-  process liveness checks via sysinfo. Only kills tasks whose process is
-  confirmed dead, not just quiet.
-- **Retry backoff** -- fixed 12-minute settle window before retry fires
-  (was immediate). PID-dead is definitive; immediate retry usually just re-stalls.
-
-**From main repo (v1.3.5-v1.4.5):**
-
-- JSON-RPC notification envelope fix (silences Claude Desktop Zod errors)
-- Dashboard port bind retries 100 ports with random jitter
-- Embedded-only dashboard (no stale disk override)
-- Codex `--` defensive separator on all 6 arg-building sites
-- Recovery notify runs in background thread (no MCP init block)
-- Restart recovery persists status to disk (no notify-storm on restart)
-- Per-reason notification icons ([Error] / [Warning] / [Info])
-- Notification label override scoped to Done only
-- Dashboard: LOAFS panel fallback to active breadcrumb count
-- Dashboard: COMPLETED TODAY panel data source wired correctly
-- Reconnect orphaned tasks on restart
-- Dashboard port default 9218
-- Dashboard URL written to `%LOCALAPPDATA%\manager-mcp\dashboard_url.txt`
-- Path migration -- all user-home/workspace/volumes paths via env vars
-
-See [CHANGELOG.md](CHANGELOG.md) for full history.
+Requires Rust stable. Windows only (toast notifications, PID-liveness checks use Windows APIs).
 
 ---
 
-## Dashboard URL
+## 48 Tools
 
-The dashboard runs at `http://127.0.0.1:{port}/`. Port is chosen dynamically
-at startup (default `9218`, retries 100 ports with random jitter if busy).
+### Task Lifecycle (12 tools)
 
-**Three ways to find your dashboard URL:**
+| Tool | Description |
+|------|-------------|
+| `task_submit` | Delegate a prompt to a backend (Claude Code, Codex, Gemini, GPT) |
+| `task_status` | Get current status, output tail, and metadata for a task |
+| `task_output` | Stream full stdout/stderr from a running or completed task |
+| `task_list` | List all tasks with optional status/session filters |
+| `task_cancel` | Kill a running task's subprocess and mark cancelled |
+| `task_poll` | Long-poll for task state changes (blocks until update or timeout) |
+| `pause_task` | Manually pause a running task |
+| `resume_task` | Resume a paused task (restarts subprocess) |
+| `task_retry` | Retry a failed task with backend/effort escalation |
+| `task_rerun` | Re-run a completed task with the same or modified prompt |
+| `task_rollback` | Rollback a task's file changes using git diff |
+| `task_cleanup` | Remove completed/failed tasks from state |
 
-1. **File:** `%LOCALAPPDATA%\manager-mcp\dashboard_url.txt`
-2. **MCP tool:** `manager:dashboard_status` -- returns `{port, running, url}`
-3. **MCP tool:** `manager:dashboard_open` -- opens dashboard in default browser
+### Session Management (5 tools)
+
+| Tool | Description |
+|------|-------------|
+| `session_start` | Start a persistent interactive session with a backend |
+| `session_send` | Send a follow-up message to an active session |
+| `session_list` | List active sessions |
+| `session_destroy` | Terminate a session and its subprocess |
+| `send` | Alias for session_send with shorter syntax |
+
+### Parallel & Routing (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `task_run_parallel` | Fan out multiple prompts to backends, collect all results |
+| `task_route` | Auto-route a prompt to the best backend based on task shape |
+| `task_decompose` | Break a complex prompt into subtasks with dependency graph |
+| `task_explain` | Explain what a task did, decisions made, files changed |
+
+### Loaf (Task Groups) (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `create_loaf` | Create a named task group with phases and acceptance criteria |
+| `loaf_update` | Update loaf progress, add findings, mark phases done |
+| `loaf_status` | Get current loaf state including subtask roll-up |
+| `loaf_close` | Close a loaf with summary and final status |
+
+### Templates (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `template_save` | Save a reusable prompt template with variable slots |
+| `template_list` | List saved templates |
+| `template_run` | Execute a template with variable substitution |
+
+### Roles (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `role_list` | List available agent roles (architect, implementer, tester, etc.) |
+| `role_create` | Define a custom role with system prompt and constraints |
+| `role_delete` | Remove a custom role |
+
+### Extraction & Workflow (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `workflow_run` | Run a multi-step workflow (sequential task chain) |
+| `review_extractions` | Review pending extraction candidates from task outputs |
+| `extract_workflow` | Accept and persist an extraction |
+| `dismiss_extraction` | Dismiss a pending extraction |
+
+### Analytics & Monitoring (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `status_bar` | One-line summary of active tasks, sessions, and system health |
+| `task_watch` | Watch a task until completion with configurable poll interval |
+| `get_analytics` | Historical stats: success rates, durations, backend comparison |
+| `run_analyzer` | Run analysis passes over task history (patterns, failures) |
+| `notify` | Send a Windows toast notification |
+| `configure` | Get/set manager runtime configuration |
+| `open_terminal` | Open a new terminal window at a given path |
+
+### Dashboard (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `dashboard_open` | Open the live dashboard in the default browser |
+| `dashboard_stop` | Stop the dashboard HTTP server |
+| `dashboard_status` | Get dashboard URL, port, and running state |
+
+### Backend Shortcuts (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `gemini_direct` | One-shot Gemini CLI call without full task lifecycle |
+| `codex_exec` | One-shot Codex call without full task lifecycle |
+| `codex_review` | Codex code review on a file or diff |
+
+---
+
+## Dashboard
+
+The embedded dashboard runs at `http://127.0.0.1:{port}/` during any active session. Default port is `9218`; pin it with `CPC_DASHBOARD_PORT`. Zones:
+
+- **Sessions** — active backend sessions with PID, uptime, last activity
+- **Active Loafs** — task groups in progress with phase completion
+- **Active Operations** — running tasks with live output tails
+- **Last 5 Tools** — recent MCP tool calls with timing
+- **Retry Chains** — chevron-linked retry sequences showing escalation path
+
+Find your URL: `dashboard_status` tool, or read `%LOCALAPPDATA%\manager-mcp\dashboard_url.txt`.
+
+---
+
+## Backends
+
+| Backend | Strengths | Typical Use | Speed | Cost |
+|---------|-----------|-------------|-------|------|
+| **Claude Code** | Multi-file edits, tool use, deep reasoning, iterative refinement | Refactors, new features, complex debugging | Medium (30-120s) | High |
+| **Codex** | One-shot code generation, fast turnaround, good at scripts | Single-file tasks, quick fixes, reviews | Fast (5-20s) | Low |
+| **Gemini CLI** | Large context window (1M tokens), broad knowledge | Large-context Q&A, doc synthesis, exploration | Medium (15-60s) | Low |
+| **GPT API** | Structured output, function calling, flexible models | Analysis, classification, structured extraction | Fast (3-15s) | Medium |
+
+Backend escalation on retry: Claude Code → Codex → Gemini. Effort escalation: low → medium → high → max.
+
+---
+
+## Auto-Pause & Safety
+
+Manager includes a **destructive-command heuristic** that auto-classifies prompts containing keywords like `git push`, `docker push`, `terraform apply`, `cargo build`, `npm install`, `delete`, `--write` as potentially destructive.
+
+These tasks default to `stall_recovery: manual` — if the subprocess dies, the task pauses instead of auto-retrying. A toast notification fires and the task waits for `resume_task` or `task_cancel`. Paused tasks aren't failures; check `paused_reason` and decide.
+
+Override per-task: pass `stall_recovery: auto` to force auto-retry, or `stall_recovery: manual` on any task for extra safety.
+
+Retry budget: `max_retries` defaults to 1. Exhausted budget → `failed_max_retries` status (task stops permanently). Previous error context is injected into retry prompts.
 
 ---
 
 ## Environment Variables
 
-All paths resolve automatically when no env vars are set. Set these to override
-the defaults or if your layout differs from the platform defaults.
-
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `CPC_DASHBOARD_PORT` | Pin the dashboard to a specific port | `9218` |
-| `CPC_VOLUMES_PATH` | Override volumes/knowledge-base root | Auto-detected via cpc-paths |
-| `CPC_WORKSPACE_ROOT` | Override workspace/source root | `C:\rust-mcp` |
-| `USERPROFILE` | User home (set by Windows, override only for testing) | `C:\Users\<you>` |
-| `OPS_BREADCRUMBS_DIR` | Ops server breadcrumb log directory | `%LOCALAPPDATA%\CPC\ops-data\logs` |
-| `LOCAL_BREADCRUMBS_DIR` | Local server breadcrumb log directory | `%LOCALAPPDATA%\CPC\local-data\logs` |
-| `MANAGER_STALL_TIMEOUT_SECS` | Stall detection timeout (legacy, now PID-based) | `600` |
-| `AUTONOMOUS_DATA_DIR` | Autonomous server data dir (breadcrumb fallback) | `%LOCALAPPDATA%\autonomous` |
+| `CPC_DASHBOARD_PORT` | Pin dashboard to a specific port | `9218` |
+| `CPC_VOLUMES_PATH` | Knowledge-base root path | Auto-detected via cpc-paths |
+| `CPC_WORKSPACE_ROOT` | Source/workspace root | `C:\rust-mcp` |
+| `OPS_BREADCRUMBS_DIR` | Ops server breadcrumb directory | `%LOCALAPPDATA%\CPC\ops-data\logs` |
+| `LOCAL_BREADCRUMBS_DIR` | Local server breadcrumb directory | `%LOCALAPPDATA%\CPC\local-data\logs` |
 | `OPENAI_API_KEY` | API key for GPT backend | (none) |
 
 ---
 
-## Quick Start
+## Related Repos
 
-### 1. Download
-
-Grab the latest release binary from the
-[Releases page](https://github.com/AIWander/manager-universal/releases).
-Two builds: `manager-universal-vX.Y.Z-x64.exe` and
-`manager-universal-vX.Y.Z-aarch64.exe`.
-
-Rename to `manager.exe` and place it somewhere on your machine.
-
-### 2. Wire into Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "manager": {
-      "command": "C:\\path\\to\\manager.exe",
-      "args": [],
-      "env": {}
-    }
-  }
-}
-```
-
-Set env overrides as needed (e.g., `"CPC_DASHBOARD_PORT": "9218"`).
-
-### 3. Restart Claude Desktop
-
-Manager starts, binds the dashboard, and begins listening for MCP calls.
-Open the dashboard URL from `%LOCALAPPDATA%\manager-mcp\dashboard_url.txt`.
+| Repo | What it does |
+|------|-------------|
+| [hands](https://github.com/AIWander/hands) | Browser, UIA, and vision desktop automation (117 tools) |
+| [workflow](https://github.com/AIWander/workflow) | API discovery, credential vault, data pipelines, watches (37 tools) |
+| [local](https://github.com/AIWander/local) | Filesystem, shell, git, transforms, sessions |
+| [autonomous](https://github.com/AIWander/autonomous) | Knowledge engine, extractions, Volumes, learning |
+| [voice-mcp](https://github.com/AIWander/Voice-Command) | Voice input/output for MCP agents |
 
 ---
 
-## Building from Source
+## Contributing
 
-Requires Rust stable. Windows only (PowerShell toast notifications, sysinfo
-PID checks use Windows APIs).
-
-```powershell
-git clone https://github.com/AIWander/manager-universal.git
-cd manager-universal
-cargo build --release
-# binary at target\release\manager.exe
-```
-
----
-
-## Overview
-
-Manager exists for the **delegate-when-the-task-gets-long** heuristic: if the
-implementation needs more than ~30-40 lines of code, delegate it to a coding
-agent instead of writing inline. Your chat context is for reasoning and
-orchestration; coding agents have their own sandboxes and token budgets.
-
-### The meta-agent pattern
-
-Your primary chat (Claude Desktop, Claude Code, or any MCP client) becomes
-the orchestrator -- it holds goal-level context, decides what to delegate,
-when to parallelize, and how to synthesize results. Coding agents are
-disposable workers. Manager sits between them as durable infrastructure:
-persisting task state to disk, tailing child process logs, and reconnecting
-surviving subprocesses across restarts.
-
-Practical consequences:
-
-- Conversation window is freed from implementation detail
-- Failed delegations do not cost orchestration context -- retry with `task_retry`
-- Long-running work survives client restarts
-- Parallel subtasks via `task_run_parallel` -- fan out, collect, synthesize
-- Multiple coding backends coexist: Claude Code for multi-step toolchains,
-  Codex for one-shot scripts, Gemini for large-context Q&A
-
----
-
-## Stall Recovery (v1.0.0)
-
-Two recovery modes for when a delegated agent process dies unexpectedly:
-
-**`stall_recovery: auto` (default for most tasks)**
-- Dead process detected -> task marked `Failed` -> retry queued (up to `max_retries`)
-- 12-minute backoff before retry fires (gives long CI/build tools time to settle)
-
-**`stall_recovery: manual` (default for destructive prompts)**
-- Dead process detected -> task marked `Paused` with `paused_reason: stall_manual_recovery`
-- Toast notification fires: "Child process exited. Manual recovery required"
-- Call `manager:resume_task` to restart, or `manager:destroy_task` to cancel
-- Use this for: database migrations, force-pushes, file rewrites, deploys
-
-Destructive-prompt heuristic triggers on: `git push`, `cargo build`, `cargo test`,
-`docker build`, `docker push`, `terraform apply`, `kubectl apply`, `npm install`,
-`pip install`, `make`, `format`, `delete`, `--write`.
-
-Override heuristic by passing `stall_recovery: auto` or `stall_recovery: manual`
-explicitly in `submit_task` params.
-
----
-
-## Retry Budget (v1.0.0)
-
-Default `max_retries: 1` -- one auto-retry per task. Pass `max_retries: 0` to
-disable auto-retry. Pass `max_retries: 2` or higher for tasks where multiple
-attempts are expected (e.g. model-inference tasks that occasionally timeout).
-
-When budget is exhausted, task status becomes `failed_max_retries`. The task
-stops and is not retried again.
-
-On retry:
-- Backend escalates (ClaudeCode -> Codex -> Gemini on successive retries)
-- Effort escalates (low/medium -> high, high -> max)
-- Previous error is injected into the new prompt
-- `retry_of` field links back to the original task
-- `retried_as` field on the original task links forward to the retry
-
----
+Issues welcome; PRs considered but this is primarily maintained as part of the CPC stack.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).
+
+Copyright 2026 Joseph Wander.
+
+---
+
+## Contact
+
+Joseph Wander
+- GitHub: [github.com/AIWander](https://github.com/AIWander/)
+- Email: [josephwander@gmail.com](mailto:josephwander@gmail.com)
