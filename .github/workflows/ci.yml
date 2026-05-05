@@ -32,6 +32,10 @@ jobs:
           ]
 
           # Also check for common text-level mojibake patterns
+          TEXT_PATTERNS = [
+              (r'\u00c3\u00a2\u00c2\u0080', 'Text-level double-encoded sequence'),
+              (r'\u00e2\u0080\u0099', None),  # skip — this is a valid right single quote
+          ]
           TEXT_MOJIBAKE = [
               (r'Ã¢', 'Mojibake a-circumflex sequence'),
               (r'Ã©', 'Mojibake e-acute sequence'),
@@ -77,6 +81,8 @@ jobs:
                   except Exception:
                       continue
                   for pattern, desc in TEXT_MOJIBAKE:
+                      if desc is None:
+                          continue
                       for m in re.finditer(re.escape(pattern), text):
                           line_num = text[:m.start()].count('\n') + 1
                           found.append(f"{path}:{line_num}: {desc}")
@@ -172,6 +178,7 @@ jobs:
           try:
               with open('README.md', 'r') as f:
                   readme = f.read()
+              # Look for "What's New in vX.Y.Z" pattern
               m = re.search(r"What's New in v([0-9]+\.[0-9]+\.[0-9]+)", readme)
               if m:
                   readme_version = m.group(1)
@@ -183,14 +190,15 @@ jobs:
                   else:
                       print(f"README version matches: v{readme_version}")
               else:
-                  print("No 'What's New in vX.Y.Z' header found in README -- skipping README check")
+                  print("No 'What's New in vX.Y.Z' header found in README — skipping README check")
           except FileNotFoundError:
-              print("No README.md found -- skipping README check")
+              print("No README.md found — skipping README check")
 
           # 3. Check CHANGELOG.md latest entry
           try:
               with open('CHANGELOG.md', 'r') as f:
                   changelog = f.read()
+              # Look for first version header: ## [X.Y.Z] or ## X.Y.Z or [X.Y.Z]
               m = re.search(r'##?\s*\[?v?([0-9]+\.[0-9]+\.[0-9]+)\]?', changelog)
               if m:
                   cl_version = m.group(1)
@@ -202,9 +210,9 @@ jobs:
                   else:
                       print(f"CHANGELOG version matches: v{cl_version}")
               else:
-                  print("Could not parse version from CHANGELOG.md -- skipping")
+                  print("Could not parse version from CHANGELOG.md — skipping")
           except FileNotFoundError:
-              print("No CHANGELOG.md found -- skipping CHANGELOG check")
+              print("No CHANGELOG.md found — skipping CHANGELOG check")
 
           # 4. Check latest git tag
           result = subprocess.run(
@@ -216,15 +224,17 @@ jobs:
           if tags:
               latest_tag = tags[0]
               tag_version = latest_tag.lstrip('v')
+              # Only warn if tag is AHEAD of Cargo.toml (tag exists but Cargo wasn't bumped)
+              # Don't fail if Cargo is ahead of tags (normal: bump Cargo, then tag later)
               if tag_version != cargo_version:
                   print(
                       f"::warning::Latest git tag {latest_tag} differs from "
-                      f"Cargo.toml v{cargo_version} (informational -- not a failure)"
+                      f"Cargo.toml v{cargo_version} (informational — not a failure)"
                   )
               else:
                   print(f"Latest git tag matches: {latest_tag}")
           else:
-              print("No v* git tags found -- skipping tag check")
+              print("No v* git tags found — skipping tag check")
 
           if errors:
               for e in errors:
@@ -254,7 +264,7 @@ jobs:
               r'autonomous:',
           ]
 
-          # Reduced set for root docs -- identity patterns (CPC, Joseph) are
+          # Reduced set for root docs — identity patterns (CPC, Joseph) are
           # legitimate in public-facing README/CHANGELOG/CONTRIBUTING.
           ROOT_FORBIDDEN = [
               r'Operating_',
@@ -281,7 +291,7 @@ jobs:
                   scan_root_files.append(f)
 
           if not scan_dirs and not scan_root_files:
-              print("No scannable paths found -- skipping")
+              print("No scannable paths found — skipping")
               sys.exit(0)
 
           def scan_file(path, patterns, allowlist):
