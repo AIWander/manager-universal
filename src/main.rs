@@ -10206,6 +10206,11 @@ fn start_pipe_server(
 // ============================================================================
 
 fn main() {
+    // Orphan-process prevention: kill this process tree when parent dies.
+    if let Err(e) = cpc_paths::process::ensure_kill_on_parent_death() {
+        eprintln!("[warn] job-object setup failed: {e}");
+    }
+
     // Set up tracing
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
