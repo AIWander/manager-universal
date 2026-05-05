@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "manager-universal",
+  "display_name": "CPC Manager",
+  "version": "1.0.1",
+  "description": "Multi-AI orchestrator delegating to Claude Code, Codex, and Gemini",
+  "long_description": "CPC Manager orchestrates multi-AI workflows by delegating tasks to Claude Code, Codex, and Gemini agents. It provides breadcrumb tracking, stall recovery, and a dashboard for monitoring delegated operations.",
+  "author": {
+    "name": "AIWander",
+    "url": "https://github.com/AIWander/manager-universal"
+  },
+  "homepage": "https://github.com/AIWander/manager-universal",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AIWander/manager-universal"
+  },
+  "license": "MIT",
+  "keywords": ["mcp", "claude", "cpc", "orchestration", "delegation", "claude-code", "codex", "gemini"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/manager.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/manager.exe",
+      "args": [],
+      "env": {
+        "CPC_DASHBOARD_PORT": "${user_config.dashboard_port}"
+      }
+    }
+  },
+  "user_config": {
+    "dashboard_port": {
+      "type": "string",
+      "title": "Dashboard port",
+      "description": "HTTP port for the manager dashboard",
+      "default": "9999",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["win32"]
+  }
+}
