@@ -1,3 +1,5 @@
+> Beta -- manager-universal and its embedded dashboard are beta software: functional and signed, but expect rough edges.
+
 # Manager Universal — Multi-Backend AI Delegation for MCP
 
 [![CI](https://github.com/AIWander/manager-universal/actions/workflows/ci.yml/badge.svg)](https://github.com/AIWander/manager-universal/actions/workflows/ci.yml)
